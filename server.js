@@ -7,6 +7,11 @@ const port = 80;
 //additional imports
 const db = require('./database/db');
 db();
+const jwt = require('jsonwebtoken');
+const JWT_Secret_Token = 'HarshIsGoingToRo$ock!';
+const fetchuser = require('./middleware/fetchuser');
+const getUser = require('./middleware/getUser');
+const cookieParser = require('cookie-parser');
 
 const {body, validationResult} = require('express-validator');
 
@@ -18,9 +23,12 @@ const bcrypt = require('bcrypt');
 app.set('view-engine', 'ejs');
 app.set('views', path.join(__dirname, 'files'))
 app.use(express.urlencoded({extended: true}));
+app.use(cookieParser());
 
 
 //server code - get
+app.get('*', getUser);
+
 app.get('/', (req, res)=>{
     res.status(200).render('homepage.ejs');
 })
@@ -31,6 +39,15 @@ app.get('/login', (req, res)=>{
 
 app.get('/signup', (req, res)=>{
     res.status(200).render('signup.ejs');
+})
+
+app.get('/userNGOs', fetchuser, (req, res)=>{
+    res.status(200).render('userNGOs.ejs')
+})
+
+app.get('/logout', (req, res)=>{
+    res.cookie('jwt', '', {expiry: 1});
+    res.redirect('/login');
 })
 
 
@@ -46,33 +63,61 @@ app.post('/signup', [
     }
 
     try {
-        // const donater = donaters.findOne({email: req.body.email});
-        // if(donater){     
-        //     return res.status(400).json({error: "Sorry, this email address is already registerd! Kindly sign-up with another email address"});
-        // }
-
         const {name, email, password} = req.body;
+
+        let donater = await donaters.findOne({email: email});
+        if(donater){     
+            return res.status(400).json({error: "Sorry, this email address is already registerd! Kindly sign-up with another email address"});
+        }
+
         const salt = await bcrypt.genSalt(10);
         const secPass = await bcrypt.hash(password, salt);
 
-        const donater = new donaters({
+        donater = new donaters({
             name: name,
             email: email,
             password: secPass
           })
 
         await donater.save();
-        console.log(donater);
-        
-        res.status(200).render('login.ejs');
+        const data = {
+            id: donater._id
+        }
+        const token = jwt.sign(data, JWT_Secret_Token);
+        res.cookie('jwt', token, {httpOnly: true});
+        res.status(200).redirect('/login');
         
     } catch (error) {
-        console.error(error.message);
+        res.send(error.message);
         res.status(500).send("An Error Occured!");
     }
-
 })
 
+app.post('/login', async (req, res)=>{
+    try {
+        const {email, password} = req.body;
+        const loginUser = await donaters.findOne({email});
+        if(!loginUser){
+            return res.status(200).redirect("/signup");
+        }
+        const loginPassword = await bcrypt.compare(password, loginUser.password);
+        if(loginPassword){
+            const data = {
+                id: loginUser.id
+            }
+            const token = jwt.sign(data, JWT_Secret_Token);
+            res.cookie('jwt', token, {httpOnly: true});
+            return res.status(200).redirect('/')
+        }
+        else{
+            return res.status(400).json("Password Incorrect!");
+        }
+
+    } catch (error) {
+        res.send(error.message);
+        res.status(500).send("An Error Occured!");
+    }
+})
 
 
 //server hosting

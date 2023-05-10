@@ -7,7 +7,11 @@
     <title>Do-Nake : Every Effort Matters</title>
 </head>
 <body>
+    <% if(!donater) {%>
     <button type="submit"><a href="/login">Login</a></button>
     <button type="submit"><a href="/signup">Sign Up</a></button>
+    <% } else { %>
+    <a href="/userNGOs">Your Donations</a>
+    <% } %>
 </body>
 </html>
